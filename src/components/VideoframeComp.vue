@@ -19,6 +19,7 @@
 import { io } from 'socket.io-client';
 export default {
   name: 'VideoFrameComp',
+  emits: ["dataReceived"],
   data() {
     return {
       videoElement: null,
@@ -44,22 +45,35 @@ export default {
       .catch(error => {
         console.error('Error accessing the camera:', error);
       });
+
+    const self=this
     this.socket.on('processed', data => {
-    //   data={
-    //     "cls": {
-    //       "name": "G",
-    //       "cls": 3,
-    //       "conf": 0.8008,
-    //       "box": [122, 6, 189, 99]
-    //     }
-    // }
-      this.detectedLabel = data.cls.name;
-      this.detectedConf = (data.cls.conf * 100).toFixed(2);
-      this.drawBox(data.cls.box);
-      this.$emit('dataReceived',data);
+      console.log('received',data)
+      if (data.status==0){
+        console.log('Error processing frame:', data.error);
+        return;
+      }
+      console.log('Data received from server:', data.response);
+      var arr=data.response
+
+      arr.forEach(function(item, index) {
+          console.log(item, index); 
+           // item is the array element, index is its index in the array
+          console.log(item,'item')
+          console.log(item.cls,'item.cls')
+          console.log(item.cls.name,'item.cls.name')
+          console.log(item.cls.name)
+          self.detectedLabel = item.cls.name
+          self.detectedConf = (item.cls.conf * 100).toFixed(2);
+          self.drawBox(item.cls.box);
+          self.emitDataToChild(item);
+        });
     });
   },
   methods: {
+    emitDataToChild(data) {
+      this.$emit('dataReceived', data);
+    },
     sendFrame() {
       if (!this.videoElement) return;
       this.adjustCanvasSize()
@@ -81,7 +95,7 @@ export default {
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.strokeStyle = 'red';
       ctx.lineWidth = 4;
-      ctx.strokeRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+      ctx.strokeRect(box[0], box[1], box[2] + box[0], box[3] + box[1]);
       ctx.font = '18px Arial';
       ctx.fillStyle = 'red';
       ctx.fillText(`${this.detectedLabel} (${this.detectedConf}%)`, box[0], box[1] - 10);

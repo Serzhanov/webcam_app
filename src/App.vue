@@ -16,9 +16,17 @@
     </div>
     <button v-if="!trainStage" @click="retrainModel">Retrain Model</button>
     <h2 v-if="trainStage">TRAINING ...</h2>
+    <div v-if="!trainStage && Object.keys(trainStats).length > 0">
+      <h3>Metrics:</h3>
+      <ul>
+        <li v-for="(value, key) in trainStats" :key="key">
+          {{ key }}: {{ value }}
+        </li>
+      </ul>
+    </div>
     <p><a href="https://dagshub.com/Serzhanov/ai_cloud_.mlflow" target="_blank">Check out our MLflow with the best UI/UX on DagsHub!</a></p>
     <div></div>
-      <div>
+      <div v-if="!trainStage">
         <label>Batch: <input v-model="batch" type="number" /></label>
         <label>Epochs: <input v-model="epochs" type="number" /></label>
         <label>Optimizer:
@@ -45,6 +53,7 @@ export default {
   },//      <WebCamUI :fullscreenState="false" @photoTaken="photoTaken" :constraints="constraints" />
   data() {
     return {
+      trainStats: {},
       trainStage:false,
       batch: 8,
       epochs: 1,
@@ -65,6 +74,7 @@ export default {
       selectedLabel: null,
     };
   },
+  
   methods: {
     submitLabel() {
       console.log('Submitting label:', this.selectedLabel);
@@ -91,9 +101,32 @@ export default {
       console.log('Data received from child component: ', data);
       this.names=[]
       this.detectedConf = data.cls.conf*100;
+      console.log(data)
       this.detectedLabel = data.cls.name;
-      //this.names.filter(name => name === data.cls.name);
+      this.names.filter(name => name === data.cls.name);
       
+    },
+    normalizeKeys(data) {
+      const newData = {};
+
+      // Helper function to convert strings to camelCase
+      function toCamelCase(str) {
+        return str
+          .toLowerCase()
+          .replace(/[^a-zA-Z0-9]+(.)/g, (match, chr) => chr.toUpperCase());
+      }
+
+      // Iterate over each key in the object
+      for (const key in data) {
+        // Safely check if the original object has this property as its own (not inherited)
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+          // Normalize the key and assign the value to the new key in newData
+          const normalizedKey = toCamelCase(key.trim());
+          newData[normalizedKey] = data[key];
+        }
+      }
+
+      return newData;
     },
     async retrainModel() {
     this.trainStage = true; // Assume this starts the loading or processing indicator
@@ -109,6 +142,14 @@ export default {
     try {
       const response = await axios.post('http://localhost:5000/retrain', trainingParams);
       console.log('Server response:', response.data);
+      if(response.data.status === 'success') {
+        this.trainStats = response.data.metrics;
+        console.log('Training successful');
+        this.trainStats=this.normalizeKeys(response.data.last_run_metrics)
+        
+      } else {
+        console.error('Training failed:', response.data.status);
+      }
     } catch (error) {
       console.error('Error sending training parameters:', error);
     } finally {
